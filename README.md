@@ -5,7 +5,7 @@ A RouterOS script that keeps DuckDNS, No-IP, Dynu, FreeDNS and/or Cloudflare DNS
 - **Five providers**, mixed freely, with one or several records each.
 - **Reads before it writes:** each record is checked first, and providers only receive an update when the IP has changed.
 - **Safe defaults:** a dry-run mode, two public IP services that must agree, TLS checks and only the `read` and `test` policies.
-- **Multi-WAN aware:** an optional interface mode reads the IP from the router itself and detects double NAT. CGNAT is detected in every mode.
+- **Multi-WAN aware:** an optional interface mode reads the IP from the router itself and detects double NAT. [CGNAT is detected in every mode](#cgnat-detection).
 - **No silent failures:** every step is logged, and the script ends with an error if anything fails.
 
 ## Contents
@@ -16,7 +16,8 @@ A RouterOS script that keeps DuckDNS, No-IP, Dynu, FreeDNS and/or Cloudflare DNS
   - [First run and scheduling](#first-run-and-scheduling)
 - [Usage](#usage)
   - [Configuration](#configuration)
-  - [Interface mode (multi-WAN and CGNAT)](#interface-mode-multi-wan-and-cgnat)
+  - [Interface mode (multi-WAN)](#interface-mode-multi-wan)
+  - [CGNAT detection](#cgnat-detection)
   - [Script behaviour](#script-behaviour)
   - [Provider errors](#provider-errors)
   - [Automation](#automation)
@@ -134,13 +135,11 @@ You can also run it from terminal:
 - **publicIpService** (string) selects the method for determining the current public IP address:
     - `auto` (default) asks the services in order until `publicIpQuorum` of them return the same address: icanhazip, ipify, Amazon, ipinfo and MikroTik.
     - `icanhazip`, `ipify`, `amazon`, `ipinfo` or `mikrotik` uses only that service. `mikrotik` reads IP > Cloud and only works if IP Cloud DDNS is already enabled.
-    - `interface` reads the IPv4 address of a router interface instead of asking an external service (see [Interface mode](#interface-mode-multi-wan-and-cgnat)).
-
-    With the external services, the script also checks the interface of each active default route: if it holds a CGNAT address (`100.64.0.0/10`), the log warns that the ISP shares the public IP and the router cannot be reached from the Internet. The records are still updated with the shared address.
+    - `interface` reads the IPv4 address of a router interface instead of asking an external service (see [Interface mode](#interface-mode-multi-wan)).
 - **publicIpQuorum** (number): only used with `publicIpService` set to `auto`. How many services must return the same address before it is used, from 1 to 5. The default, `2`, keeps one service that answers a wrong address (a fault, or a tampered answer) from redirecting the records, at the cost of one more request per run; `1` takes the first answer. If too few services agree, the run ends with an error and no record is changed.
 - **checkCertificate** (string): TLS certificate check for HTTPS requests, `yes`, `yes-without-crl` (default) or `no`. `no` is not recommended because credentials travel in these requests, and anyone on the path could also change the public IP the services return. RouterOS built-in trust store is enough, no certificates need to be imported.
 
-### Interface mode (multi-WAN and CGNAT)
+### Interface mode (multi-WAN)
 
 Setting `publicIpService` to `interface` makes the script read the public IP from a router interface instead of asking an external service. It is meant for routers whose WAN interface holds the public IPv4 address itself (PPPoE, or DHCP from an ONT in bridge mode). On those routers it is the recommended mode: it does not depend on third-party services, and it cannot pick a wrong address when the router's traffic leaves through a VPN or a backup WAN, as an external service would see the address of that path instead. It also covers:
 
@@ -159,9 +158,22 @@ Setting `publicIpService` to `interface` makes the script read the public IP fro
     :local wanInterface "pppoe-out1"
     ```
     If every record has its own `interface` field, `wanInterface` is not used and can keep its placeholder value `WAN_INTERFACE`.
-- **CGNAT and double NAT detection:** if the interface has a CGNAT address (`100.64.0.0/10`), the log says the ISP shares the public IP and the router cannot be reached from the Internet. If it has a private address, the router is behind another NAT device and `publicIpService` must stay `auto`. A link-local address (`169.254.0.0/16`) means the interface got no address from the ISP. In all these cases the records on that interface are not updated and the script ends with an error.
+- **Double NAT detection:** if the interface has a private address, the router is behind another NAT device and `publicIpService` must stay `auto`. A link-local address (`169.254.0.0/16`) means the interface got no address from the ISP. In both cases the records on that interface are not updated and the script ends with an error. CGNAT addresses are covered in [CGNAT detection](#cgnat-detection).
 
 Use the name of the interface that holds the address (IP > Addresses). With PPPoE, that is the PPPoE interface (e.g. `pppoe-out1`), not the Ethernet port or VLAN it runs on; if the Ethernet port or VLAN is set by mistake, the log names the PPPoE client to use instead. Without PPPoE, use the Ethernet port, bridge or VLAN that holds the address. This applies to `wanInterface` and to the `interface` field alike.
+
+### CGNAT detection
+
+With carrier-grade NAT (CGNAT), the ISP gives the router an address in `100.64.0.0/10` and shares one public IP among several customers. The records can still point to that shared IP, but the router cannot be reached from the Internet through it. To fix it, ask the ISP for a public IPv4 address.
+
+The script detects CGNAT in every `publicIpService` mode and logs a warning:
+
+- With the external services (`auto` or a single service), it checks the interface of each active default route. The records are still updated with the public IP the services return.
+- In interface mode, it checks each record's interface. A CGNAT address is not a public IP, so the records on that interface are not updated and the script ends with an error.
+
+```
+MikroTikDDNSUpdater: WARNING - ether1 has 100.64.0.2, a CGNAT address: the ISP shares the public IP and the router cannot be reached from the Internet
+```
 
 ### Script behaviour
 
