@@ -270,6 +270,17 @@
     :return true
 }
 
+# The log text for an interface that holds a CGNAT address (inside network/netmask), or "" if
+# address is outside that range. Shared by the interface mode and the external services, which
+# both log it as a warning (in interface mode, the skipped record adds its own error).
+:local cgnatMessage do={
+    :if (($address & $netmask) != $network) do={
+        :return ""
+    }
+    :return ($interface . " has " . $address . ", a CGNAT address: the ISP shares the public IP" . \
+        " and the router cannot be reached from the Internet")
+}
+
 # The IPv4 address written in text, or "" if text is not exactly four dot-separated numbers from
 # 0 to 255: partial values such as "10.1", which :toip would expand, are rejected.
 :local parseIpv4 do={
@@ -687,6 +698,40 @@
     :error ($logPrefix . "unable to get the public IP")
 }
 
+# The services only see the ISP's public IP. Behind CGNAT it is shared with other customers, so
+# the records still get it, but the router cannot be reached through them: check the address of
+# each interface that holds an active default route.
+:if ($publicIpService != "interface") do={
+    :onerror cgnatError in={
+        :local checkedInterfaces ""
+        :foreach routeId in=[/ip route find where dst-address=0.0.0.0/0 routing-table=main \
+            active=yes] do={
+            # The gateway comes as "100.64.0.1%ether1", or as "pppoe-out1" alone.
+            :local routeInterface [:tostr [/ip route get $routeId immediate-gw]]
+            :local percentAt [:find $routeInterface "%"]
+            :if ([:typeof $percentAt] = "num") do={
+                :set routeInterface [:pick $routeInterface ($percentAt + 1) [:len $routeInterface]]
+            }
+            :if ([:typeof [:find $checkedInterfaces ("," . $routeInterface . ",")]] != "num") do={
+                :set checkedInterfaces ($checkedInterfaces . "," . $routeInterface . ",")
+                :foreach addressId in=[/ip address find where interface=$routeInterface \
+                    disabled=no invalid=no] do={
+                    :local address [:tostr [/ip address get $addressId address]]
+                    :local wanIp [:toip [:pick $address 0 [:find $address "/"]]]
+                    :local cgnatText [$cgnatMessage interface=$routeInterface address=$wanIp \
+                        network=$cgnatNetwork netmask=$cgnatNetmask]
+                    :if ([:len $cgnatText] > 0) do={
+                        :log warning ($logPrefix . "WARNING - " . $cgnatText)
+                    }
+                }
+            }
+        }
+    } do={
+        :log warning ($logPrefix . "WARNING - cannot check the WAN address for CGNAT: " . \
+            $cgnatError)
+    }
+}
+
 # Every record gets the same public IP, unless interface mode sets each one below.
 :for index from=0 to=($recordCount - 1) do={
     :set recordIds ($recordIds, "")
@@ -767,10 +812,10 @@
                     :log info ($logPrefix . "INFO - public IP is " . $interfaceIp . \
                         " (" . $interfaceName . ")")
                 } else={
-                    :if (($interfaceIp & $cgnatNetmask) = $cgnatNetwork) do={
-                        :log error ($logPrefix . "ERROR - " . $interfaceName . " has " . \
-                            $interfaceIp . ", a CGNAT address: the ISP shares the public IP and" . \
-                            " the router cannot be reached from the Internet")
+                    :local cgnatText [$cgnatMessage interface=$interfaceName address=$interfaceIp \
+                        network=$cgnatNetwork netmask=$cgnatNetmask]
+                    :if ([:len $cgnatText] > 0) do={
+                        :log warning ($logPrefix . "WARNING - " . $cgnatText)
                     } else={
                         :if (($interfaceIp & $linkLocalNetmask) = $linkLocalNetwork) do={
                             :log error ($logPrefix . "ERROR - " . $interfaceName . " has the link-local" . \

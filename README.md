@@ -5,7 +5,7 @@ A RouterOS script that keeps DuckDNS, No-IP, Dynu, FreeDNS and/or Cloudflare DNS
 - **Five providers**, mixed freely, with one or several records each.
 - **Reads before it writes:** each record is checked first, and providers only receive an update when the IP has changed.
 - **Safe defaults:** a dry-run mode, two public IP services that must agree, TLS checks and only the `read` and `test` policies.
-- **Multi-WAN aware:** an optional interface mode reads the IP from the router itself and detects CGNAT and double NAT.
+- **Multi-WAN aware:** an optional interface mode reads the IP from the router itself and detects double NAT. CGNAT is detected in every mode.
 - **No silent failures:** every step is logged, and the script ends with an error if anything fails.
 
 ## Contents
@@ -135,6 +135,8 @@ You can also run it from terminal:
     - `auto` (default) asks the services in order until `publicIpQuorum` of them return the same address: icanhazip, ipify, Amazon, ipinfo and MikroTik.
     - `icanhazip`, `ipify`, `amazon`, `ipinfo` or `mikrotik` uses only that service. `mikrotik` reads IP > Cloud and only works if IP Cloud DDNS is already enabled.
     - `interface` reads the IPv4 address of a router interface instead of asking an external service (see [Interface mode](#interface-mode-multi-wan-and-cgnat)).
+
+    With the external services, the script also checks the interface of each active default route: if it holds a CGNAT address (`100.64.0.0/10`), the log warns that the ISP shares the public IP and the router cannot be reached from the Internet. The records are still updated with the shared address.
 - **publicIpQuorum** (number): only used with `publicIpService` set to `auto`. How many services must return the same address before it is used, from 1 to 5. The default, `2`, keeps one service that answers a wrong address (a fault, or a tampered answer) from redirecting the records, at the cost of one more request per run; `1` takes the first answer. If too few services agree, the run ends with an error and no record is changed.
 - **checkCertificate** (string): TLS certificate check for HTTPS requests, `yes`, `yes-without-crl` (default) or `no`. `no` is not recommended because credentials travel in these requests, and anyone on the path could also change the public IP the services return. RouterOS built-in trust store is enough, no certificates need to be imported.
 
