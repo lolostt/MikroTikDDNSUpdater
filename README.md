@@ -21,8 +21,6 @@ A RouterOS script that keeps DuckDNS, No-IP, Dynu, FreeDNS and/or Cloudflare DNS
   - [Script behaviour](#script-behaviour)
   - [Provider errors](#provider-errors)
   - [Automation](#automation)
-- [Authors](#authors)
-- [License](#license)
 
 ---
 
@@ -217,10 +215,7 @@ To set and forget the script, run it with the RouterOS scheduler under System > 
 
 ---
 
-## Authors
-
-* **lolost** - [sleepingcoconut.com](https://sleepingcoconut.com/)
-
-## License
-
-This project is licensed under the [MIT License](LICENSE).
+<p>
+  <a href="https://github.com/lolostt"><img src="https://github.com/user-attachments/assets/85619289-29ae-406d-badb-23e38b30bebe" alt="Sleeping Coconut" width="32" height="32" align="absmiddle"></a>
+  · <a href="https://sleepingcoconut.com">www.sleepingcoconut.com</a> · 2026
+</p>
