@@ -21,6 +21,7 @@ A RouterOS script that keeps DuckDNS, No-IP, Dynu, FreeDNS and/or Cloudflare DNS
   - [Script behaviour](#script-behaviour)
   - [Provider errors](#provider-errors)
   - [Automation](#automation)
+- [License](#license)
 
 ---
 
@@ -212,6 +213,10 @@ To set and forget the script, run it with the RouterOS scheduler under System > 
 ```
 
 <img width="545" height="733" alt="Scheduler entry" src="https://github.com/user-attachments/assets/f44379b5-85fb-44c0-9247-9446ded7bd5c" />
+
+## License
+
+MIT. See [LICENSE](LICENSE).
 
 ---
 
